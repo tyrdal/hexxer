@@ -1,0 +1,9 @@
+[package]
+name = "hexxer"
+version = "0.1.0"
+edition = "2021"
+description = "A xxd like hexdump cli tool"
+license = "MIT"
+
+[dependencies]
+colored = "2.0.*"
