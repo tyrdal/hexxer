@@ -1,7 +1,18 @@
+mod config;
+
 use colored::*;
-use std::env;
 use std::fs::File;
 use std::io::{self, Read};
+use std::path::PathBuf;
+
+const BUFFER_SIZE: usize = 16;
+
+enum Format {
+    Hexadecimal,
+    Octal,
+    Decimal,
+    Binary,
+}
 
 fn colorize(text: &str, color: Color, use_color: bool) -> String {
     if use_color {
@@ -11,72 +22,114 @@ fn colorize(text: &str, color: Color, use_color: bool) -> String {
     }
 }
 
-fn hexdump(filename: &str, use_color: bool) -> io::Result<()> {
-    let mut file = File::open(filename)?;
-    let mut buffer = [0u8; 16]; // Read in chunks of 16 bytes
+fn dump<R: Read>(mut reader: R, config: config::Config) -> io::Result<()> {
+    let mut buffer = [0u8; BUFFER_SIZE]; // Read in chunks of 16 bytes
+    let mut offset = config.offset;
+    let mut total_read: usize = 0;
 
-    let mut offset = 0;
-    while let Ok(bytes_read) = file.read(&mut buffer) {
-        if bytes_read == 0 {
-            break;
-        }
-
-        // Print offset (yellow if color is enabled)
-        print!(
-            "{}",
-            colorize(&format!("{:08x}: ", offset), Color::Yellow, use_color)
-        );
-
-        // Print hex values (cyan if color is enabled)
-        for i in 0..bytes_read {
-            if i == 8 {
-                print!(" "); // Extra space in the middle for readability
+    if total_read < config.length {
+        loop {
+            let to_read = std::cmp::min(BUFFER_SIZE, config.length - total_read);
+            let bytes_read = reader.read(&mut buffer[..to_read])?;
+            if bytes_read == 0 || total_read >= config.length {
+                // EOF reached
+                break;
             }
-            print!(
-                "{}",
-                colorize(&format!("{:02x} ", buffer[i]), Color::Cyan, use_color)
-            );
-        }
 
-        // Pad for short lines
-        if bytes_read < 16 {
-            for i in bytes_read..16 {
-                print!("   ");
-                if i == 7 {
-                    print!(" ");
+            print!("{:08x}: ", offset);
+            (0..bytes_read).for_each(|i| {
+                if i == 8 {
+                    print!(" "); // Extra space in the middle for readability
+                }
+                print!("{:02x} ", buffer[i]);
+            });
+
+            // Pad for short lines
+            if bytes_read < 16 {
+                for i in bytes_read..16 {
+                    print!("   ");
+                    if i == 7 {
+                        print!(" ");
+                    }
                 }
             }
-        }
 
-        // Print ASCII representation
-        print!("|");
-        for &byte in &buffer[..bytes_read] {
-            let ch = if byte.is_ascii_graphic() || byte.is_ascii_whitespace() {
-                colorize(&format!("{}", byte as char), Color::Green, use_color)
-            } else {
-                colorize(".", Color::Red, use_color)
-            };
-            print!("{}", ch);
-        }
-        println!("|");
+            // Print ASCII representation
+            for &byte in &buffer[..bytes_read] {
+                let ch = if byte.is_ascii_graphic() || byte.is_ascii_whitespace() {
+                    colorize(&format!("{}", byte as char), Color::Green, true)
+                } else {
+                    colorize(".", Color::Red, true)
+                };
+                print!("{}", ch);
+            }
+            println!();
 
-        offset += bytes_read;
+            total_read += bytes_read;
+            offset += bytes_read
+        }
+        //
+        //     let mut offset = 0;
+        //     while let Ok(bytes_read) = file.read(&mut buffer) {
+        //         if bytes_read == 0 {
+        //             break;
+        //         }
+        //
+        //         // Print offset (yellow if color is enabled)
+        //         print!(
+        //             "{}",
+        //             colorize(&format!("{:08x}: ", offset), Color::Yellow, use_color)
+        //         );
+        //
+        //         // Print hex values (cyan if color is enabled)
+        //         for i in 0..bytes_read {
+        //             if i == 8 {
+        //                 print!(" "); // Extra space in the middle for readability
+        //             }
+        //             print!(
+        //                 "{}",
+        //                 colorize(&format!("{:02x} ", buffer[i]), Color::Cyan, use_color)
+        //             );
+        //         }
+        //
+        //         // Pad for short lines
+        //         if bytes_read < 16 {
+        //             for i in bytes_read..16 {
+        //                 print!("   ");
+        //                 if i == 7 {
+        //                     print!(" ");
+        //                 }
+        //             }
+        //         }
+        //
+        //         // Print ASCII representation
+        //         print!("|");
+        //         for &byte in &buffer[..bytes_read] {
+        //             let ch = if byte.is_ascii_graphic() || byte.is_ascii_whitespace() {
+        //                 colorize(&format!("{}", byte as char), Color::Green, use_color)
+        //             } else {
+        //                 colorize(".", Color::Red, use_color)
+        //             };
+        //             print!("{}", ch);
+        //         }
+        //         println!("|");
+        //
+        //         offset += bytes_read;
+        //     }
     }
 
     Ok(())
 }
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 || args.len() > 3 {
-        eprintln!("Usage: {} <filename> [--color]", args[0]);
-        return;
+fn get_reader(input: Option<&PathBuf>) -> io::Result<Box<dyn Read>> {
+    match input {
+        Some(path) => Ok(Box::new(File::open(path)?)),
+        None => Ok(Box::new(io::stdin().lock())),
     }
+}
 
-    let filename = &args[1];
-    let use_color = args.get(2).map_or(false, |arg| arg == "--color");
-
-    if let Err(e) = hexdump(filename, use_color) {
-        eprintln!("Error: {}", e);
-    }
+fn main() -> std::io::Result<()> {
+    let config = config::Config::new();
+    dump(get_reader(config.input.as_ref())?, config)?;
+    Ok(())
 }
