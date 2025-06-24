@@ -1,3 +1,4 @@
+#![allow(dead_code)] // TODO: Remove this once everything is implemented
 mod config;
 
 use colored::*;
@@ -6,6 +7,7 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 const BUFFER_SIZE: usize = 16;
+const SPACE: u8 = 0x20;
 
 enum Format {
     Hexadecimal,
@@ -27,11 +29,15 @@ fn dump<R: Read>(mut reader: R, config: config::Config) -> io::Result<()> {
     let mut offset = config.offset;
     let mut total_read: usize = 0;
 
-    if total_read < config.length {
+    if total_read < config.length || config.length == 0 {
         loop {
-            let to_read = std::cmp::min(BUFFER_SIZE, config.length - total_read);
+            let to_read = if config.length == 0 {
+                BUFFER_SIZE
+            } else {
+                std::cmp::min(BUFFER_SIZE, config.length - total_read)
+            };
             let bytes_read = reader.read(&mut buffer[..to_read])?;
-            if bytes_read == 0 || total_read >= config.length {
+            if bytes_read == 0 {
                 // EOF reached
                 break;
             }
@@ -56,8 +62,14 @@ fn dump<R: Read>(mut reader: R, config: config::Config) -> io::Result<()> {
 
             // Print ASCII representation
             for &byte in &buffer[..bytes_read] {
-                let ch = if byte.is_ascii_graphic() || byte.is_ascii_whitespace() {
+                let ch = if byte.is_ascii_graphic() || byte == SPACE {
                     colorize(&format!("{}", byte as char), Color::Green, true)
+                } else if byte.is_ascii_control() {
+                    colorize(
+                        &format!("{}", char::from_u32(0x2400 + byte as u32).unwrap_or('�')),
+                        Color::Blue,
+                        true,
+                    )
                 } else {
                     colorize(".", Color::Red, true)
                 };
@@ -68,54 +80,6 @@ fn dump<R: Read>(mut reader: R, config: config::Config) -> io::Result<()> {
             total_read += bytes_read;
             offset += bytes_read
         }
-        //
-        //     let mut offset = 0;
-        //     while let Ok(bytes_read) = file.read(&mut buffer) {
-        //         if bytes_read == 0 {
-        //             break;
-        //         }
-        //
-        //         // Print offset (yellow if color is enabled)
-        //         print!(
-        //             "{}",
-        //             colorize(&format!("{:08x}: ", offset), Color::Yellow, use_color)
-        //         );
-        //
-        //         // Print hex values (cyan if color is enabled)
-        //         for i in 0..bytes_read {
-        //             if i == 8 {
-        //                 print!(" "); // Extra space in the middle for readability
-        //             }
-        //             print!(
-        //                 "{}",
-        //                 colorize(&format!("{:02x} ", buffer[i]), Color::Cyan, use_color)
-        //             );
-        //         }
-        //
-        //         // Pad for short lines
-        //         if bytes_read < 16 {
-        //             for i in bytes_read..16 {
-        //                 print!("   ");
-        //                 if i == 7 {
-        //                     print!(" ");
-        //                 }
-        //             }
-        //         }
-        //
-        //         // Print ASCII representation
-        //         print!("|");
-        //         for &byte in &buffer[..bytes_read] {
-        //             let ch = if byte.is_ascii_graphic() || byte.is_ascii_whitespace() {
-        //                 colorize(&format!("{}", byte as char), Color::Green, use_color)
-        //             } else {
-        //                 colorize(".", Color::Red, use_color)
-        //             };
-        //             print!("{}", ch);
-        //         }
-        //         println!("|");
-        //
-        //         offset += bytes_read;
-        //     }
     }
 
     Ok(())
