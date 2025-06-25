@@ -9,7 +9,7 @@ pub struct Config {
     pub plain: bool,
     pub cols: u16,
     pub grouping: u16,
-    pub seek: usize,
+    pub seek: i64,
     pub offset: usize,
     pub length: usize,
 }
@@ -25,7 +25,7 @@ impl Config {
             .copied()
             .unwrap_or(if plain { 30 } else { 16 });
         let grouping = cli.get_one::<u16>("grouping").copied().unwrap_or(2u16);
-        let seek = cli.get_one::<usize>("seek").copied().unwrap_or(0usize);
+        let seek = cli.get_one::<i64>("seek").copied().unwrap_or(0i64);
         let offset = cli.get_one::<usize>("offset").copied().unwrap_or(0usize);
         let length = cli.get_one::<usize>("length").copied().unwrap_or(0usize);
 
@@ -36,7 +36,7 @@ impl Config {
             grouping,
             seek,
             offset,
-            length
+            length,
         }
     }
 }
@@ -63,6 +63,7 @@ fn parse_cli() -> clap::ArgMatches {
                 .short('p')
                 .long("plain")
                 .help("plain text (hex only)")
+                .conflicts_with("offset")
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(
@@ -70,6 +71,7 @@ fn parse_cli() -> clap::ArgMatches {
                 .short('c')
                 .long("columns")
                 .help("Display <columns> octets per line. Default: 16 (-P/--plain: 30 ) A 0 results in one long line of output.")
+                .num_args(1)
                 .value_parser(clap::value_parser!(u16)),
         )
         .arg(
@@ -77,6 +79,7 @@ fn parse_cli() -> clap::ArgMatches {
                 .short('g')
                 .long("grouping")
                 .help("Number of octets per group. Default: 2. Not compatible with -P/--plain.")
+                .num_args(1)
                 .conflicts_with("plain")
                 .value_parser(clap::value_parser!(u16)),
         )
@@ -85,7 +88,9 @@ fn parse_cli() -> clap::ArgMatches {
                 .short('s')
                 .long("seek")
                 .help("Seek to <offset> before reading.")
-                .value_parser(clap::value_parser!(usize)),
+                .num_args(1)
+                .allow_negative_numbers(true)
+                .value_parser(clap::value_parser!(i64)),
         )
         .arg(
             Arg::new("offset")
@@ -98,7 +103,8 @@ fn parse_cli() -> clap::ArgMatches {
             Arg::new("length")
                 .short('l')
                 .long("length")
-                .help("Stop after <length> octets. A 0 means no limit.")
+                .help("Stop after <length> octets.")
+                .num_args(1)
                 .value_parser(clap::value_parser!(usize)),
         )
         .get_matches()

@@ -1,15 +1,15 @@
 [package]
 name = "hexxer"
 authors = ["René Möhring <rene_moehring@gmx.de>"]
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 description = "A xxd like hexdump cli tool"
 license = "MIT"
-keywords = ["xxd", "hex dump"]
+keywords = ["xxd", "hexdump"]
 repository = "https://github.com/tyrdal/hexxer"
 
 [dependencies]
-clap = { version = "4.5.*", features = ["derive"] }
+clap = { version = "4.5.*"}
 colored = "2.0.*"
 
 [[bin]]
