@@ -10,8 +10,20 @@ repository = "https://github.com/tyrdal/hexxer"
 
 [dependencies]
 clap = { version = "4.5.*"}
-colored = "2.0.*"
+owo-colors = { version = "4.2.*", features = ["supports-colors"] }
 
 [[bin]]
 name = "hexx"
 path = "src/main.rs"
+
+# TODO:
+# help, roadmap and readme markdown files
+# reverse hexdump
+# config for colors -> see also hexyl --print-color-table, maybe alternating color shades between lines
+# binary and octal dumps
+# show offset in decimal
+# support for uppercase hex letters
+# export arrays for c, rust maybe more
+# autoskip -> a * replace nul lines, maybe also identical lines?
+# little endian
+# toggle address and text part 

@@ -12,6 +12,9 @@ pub struct Config {
     pub seek: i64,
     pub offset: usize,
     pub length: usize,
+    pub show_offset: bool,
+    pub show_text: bool,
+    pub decimal_offset: bool,
 }
 
 impl Config {
@@ -28,6 +31,9 @@ impl Config {
         let seek = cli.get_one::<i64>("seek").copied().unwrap_or(0i64);
         let offset = cli.get_one::<usize>("offset").copied().unwrap_or(0usize);
         let length = cli.get_one::<usize>("length").copied().unwrap_or(0usize);
+        let show_offset = !cli.get_flag("no_offset");
+        let show_text = !cli.get_flag("no_text");
+        let decimal_offset = cli.get_flag("decimal_offset");
 
         Self {
             input,
@@ -37,6 +43,9 @@ impl Config {
             seek,
             offset,
             length,
+            show_offset,
+            show_text,
+            decimal_offset,
         }
     }
 }
@@ -64,6 +73,28 @@ fn parse_cli() -> clap::ArgMatches {
                 .long("plain")
                 .help("plain text (hex only)")
                 .conflicts_with("offset")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("no_offset")
+                .long("no-offset")
+                .help("Don't show the offset part")
+                .default_value("false")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("no_text")
+                .long("no-text")
+                .help("Don't show the text part")
+                .default_value("false")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("decimal_offset")
+                .short('d')
+                .long("decimal")
+                .help("Show offset in decimal instead of hex")
+                .default_value("false")
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(

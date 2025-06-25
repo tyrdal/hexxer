@@ -1,12 +1,13 @@
 #![allow(dead_code)] // TODO: Remove this once everything is implemented
 mod config;
 
-use colored::*;
+use owo_colors::{OwoColorize, Stream::Stdout};
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 
 const SPACE: u8 = 0x20;
+const NUL: u8 = 0x00;
 
 enum Format {
     Hexadecimal,
@@ -14,6 +15,33 @@ enum Format {
     Decimal,
     Binary,
 }
+
+// #[derive(Debug)]
+// struct FrameChars {
+//     top_left: char,
+//     horizontal: char,
+//     vertical: char,
+//     top_joint: char,
+//     top_right: char,
+//     bottom_left: char,
+//     bottom_joint: char,
+//     bottom_right: char,
+// }
+//
+// impl FrameChars {
+//     fn classic() -> Self {
+//         Self {
+//             top_left: '┌',
+//             horizontal: '─',
+//             vertical: '│',
+//             top_joint: '┬',
+//             top_right: '┐',
+//             bottom_left: '└',
+//             bottom_joint: '┴',
+//             bottom_right: '┘',
+//         }
+//     }
+// }
 
 fn discard_bytes<R: Read>(mut reader: R, mut to_skip: usize) -> io::Result<R> {
     let mut buffer = [0u8; 4096];
@@ -30,21 +58,40 @@ fn discard_bytes<R: Read>(mut reader: R, mut to_skip: usize) -> io::Result<R> {
     Ok(reader)
 }
 
-fn colorize(text: &str, color: Color, use_color: bool) -> String {
+fn colorize(text: &str, color: owo_colors::CssColors, use_color: bool) -> String {
     if use_color {
-        text.color(color).to_string()
+        text.if_supports_color(Stdout, |text| text.color(color))
+            .to_string()
     } else {
         text.to_string()
     }
 }
 
-fn dump<R: Read>(mut reader: R, config: config::Config) -> io::Result<()> {
+// fn draw_frame_top(config: &config::Config) {
+//     let mut line = String::new();
+//     line.push(FrameChars::classic().top_left);
+//     (0..config.cols).for_each(|_| {
+//         line.push(FrameChars::classic().horizontal);
+//     });
+//     println!("{}", line);
+//     //         FrameChars::classic().horizontal,
+//     //         FrameChars::classic().top_joint,
+//     //         FrameChars::classic().top_right,
+//     //         FrameChars::classic().bottom_left,
+//     //         FrameChars::classic().bottom_joint
+//     //     )?;
+//     // }
+// }
+
+// TODO refactor coloring, too much repetition here
+fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
     let octets_per_line = config.cols as usize;
     let mut buffer = vec![0u8; octets_per_line]; // Read in chunks of octets_per_line bytes
     let mut offset = config.offset;
     let mut total_read: usize = 0;
 
     if total_read < config.length || config.length == 0 {
+        let mut row_flag = true;
         loop {
             let to_read: usize = if config.length == 0 {
                 octets_per_line
@@ -63,12 +110,83 @@ fn dump<R: Read>(mut reader: R, config: config::Config) -> io::Result<()> {
                 }
                 println!();
             } else {
-                print!("{:08x}: ", offset);
+                if config.show_offset {
+                    if config.decimal_offset {
+                        print!(
+                            "{}",
+                            colorize(
+                                &format!("{:08}: ", offset),
+                                if row_flag {
+                                    owo_colors::CssColors::LightBlue
+                                } else {
+                                    owo_colors::CssColors::CadetBlue
+                                },
+                                true,
+                            )
+                        );
+                    } else {
+                        print!(
+                            "{}",
+                            colorize(
+                                &format!("{:08x}: ", offset),
+                                if row_flag {
+                                    owo_colors::CssColors::LightBlue
+                                } else {
+                                    owo_colors::CssColors::CadetBlue
+                                },
+                                true,
+                            )
+                        );
+                    }
+                }
                 (0..bytes_read).for_each(|i| {
                     if i != 0 && i % config.grouping as usize == 0 {
                         print!(" "); // Extra space to separate groups
                     }
-                    print!("{:02x}", buffer[i]);
+                    print!(
+                        "{}",
+                        if buffer[i].is_ascii_graphic() {
+                            colorize(
+                                &format!("{:02x}", buffer[i]),
+                                if row_flag {
+                                    owo_colors::CssColors::LightSteelBlue
+                                } else {
+                                    owo_colors::CssColors::LightSlateGray
+                                },
+                                true,
+                            )
+                        } else if buffer[i] == NUL {
+                            colorize(
+                                &format!("{:02x}", buffer[i]),
+                                if row_flag {
+                                    owo_colors::CssColors::DimGray
+                                } else {
+                                    owo_colors::CssColors::DarkGray
+                                },
+                                true,
+                            )
+                        } else if buffer[i].is_ascii_control() || buffer[i] == SPACE {
+                            colorize(
+                                &format!("{:02x}", buffer[i]),
+                                if row_flag {
+                                    owo_colors::CssColors::LawnGreen
+                                } else {
+                                    owo_colors::CssColors::GreenYellow
+                                },
+                                true,
+                            )
+                        } else {
+                            colorize(
+                                &format!("{:02x}", buffer[i]),
+                                if row_flag {
+                                    owo_colors::CssColors::LightCoral
+                                } else {
+                                    owo_colors::CssColors::IndianRed
+                                },
+                                true,
+                            )
+                        }
+                    );
                 });
                 print!(" ");
 
@@ -76,32 +194,64 @@ fn dump<R: Read>(mut reader: R, config: config::Config) -> io::Result<()> {
                 if bytes_read < octets_per_line {
                     for i in bytes_read..octets_per_line {
                         print!("  ");
-                        if i == config.grouping as usize {
+                        if i % config.grouping as usize == 0 {
                             print!(" ");
                         }
                     }
                 }
 
-                // Print text representation
-                for &byte in &buffer[..bytes_read] {
-                    let ch = if byte.is_ascii_graphic() || byte == SPACE {
-                        colorize(&format!("{}", byte as char), Color::Green, true)
-                    } else if byte.is_ascii_control() {
-                        colorize(
-                            &format!("{}", char::from_u32(0x2400 + byte as u32).unwrap_or('�')),
-                            Color::Blue,
-                            true,
-                        )
-                    } else {
-                        colorize(".", Color::Red, true)
-                    };
-                    print!("{}", ch);
+                if config.show_text {
+                    for &byte in &buffer[..bytes_read] {
+                        let ch = if byte.is_ascii_graphic() {
+                            colorize(
+                                &format!("{}", byte as char),
+                                if row_flag {
+                                    owo_colors::CssColors::LightBlue
+                                } else {
+                                    owo_colors::CssColors::CadetBlue
+                                },
+                                true,
+                            )
+                        } else if byte == NUL {
+                            colorize(
+                                &format!("{}", char::from_u32(0x2400 + byte as u32).unwrap_or('�')),
+                                if row_flag {
+                                    owo_colors::CssColors::DimGray
+                                } else {
+                                    owo_colors::CssColors::DarkGray
+                                },
+                                true,
+                            )
+                        } else if byte.is_ascii_control() || byte == SPACE {
+                            colorize(
+                                &format!("{}", char::from_u32(0x2400 + byte as u32).unwrap_or('�')),
+                                if row_flag {
+                                    owo_colors::CssColors::LawnGreen
+                                } else {
+                                    owo_colors::CssColors::GreenYellow
+                                },
+                                true,
+                            )
+                        } else {
+                            colorize(
+                                ".",
+                                if row_flag {
+                                    owo_colors::CssColors::LightCoral
+                                } else {
+                                    owo_colors::CssColors::IndianRed
+                                },
+                                true,
+                            )
+                        };
+                        print!("{}", ch);
+                    }
                 }
                 println!();
             }
 
             total_read += bytes_read;
-            offset += bytes_read
+            offset += bytes_read;
+            row_flag = !row_flag;
         }
     }
 
@@ -137,6 +287,6 @@ fn get_reader(input: Option<&PathBuf>, seek: i64) -> io::Result<Box<dyn Read>> {
 
 fn main() -> std::io::Result<()> {
     let config = config::Config::new();
-    dump(get_reader(config.input.as_ref(), config.seek)?, config)?;
+    dump(get_reader(config.input.as_ref(), config.seek)?, &config)?;
     Ok(())
 }
