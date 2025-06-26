@@ -1,3 +1,7 @@
+pub mod color_choice;
+use clap::value_parser;
+use color_choice::ColorChoice;
+
 use std::path::PathBuf;
 
 use clap::builder::styling;
@@ -15,6 +19,7 @@ pub struct Config {
     pub show_offset: bool,
     pub show_text: bool,
     pub decimal_offset: bool,
+    pub color_choice: ColorChoice,
 }
 
 impl Config {
@@ -34,6 +39,10 @@ impl Config {
         let show_offset = !cli.get_flag("no_offset");
         let show_text = !cli.get_flag("no_text");
         let decimal_offset = cli.get_flag("decimal_offset");
+        let color_choice = cli
+            .get_one::<ColorChoice>("color")
+            .expect("Invalid color choice")
+            .to_owned();
 
         Self {
             input,
@@ -46,6 +55,7 @@ impl Config {
             show_offset,
             show_text,
             decimal_offset,
+            color_choice,
         }
     }
 }
@@ -61,17 +71,17 @@ fn parse_cli() -> clap::ArgMatches {
         .styles(STYLES)
         .version("0.1.0")
         .author("Tyrdal <tyrdal@gmx.de>")
-        .about("A clap learning tool")
+        .about("A hexdump tool")
         .arg(
             Arg::new("input")
-                .help("Sets the input file to use, or '-' for stdin.")
+                .help("Sets the input file to use, if not present stdin is used.")
                 .index(1),
         )
         .arg(
             Arg::new("plain")
                 .short('p')
                 .long("plain")
-                .help("plain text (hex only)")
+                .help("Plain text (hex only).")
                 .conflicts_with("offset")
                 .action(clap::ArgAction::SetTrue),
         )
@@ -101,7 +111,7 @@ fn parse_cli() -> clap::ArgMatches {
             Arg::new("cols")
                 .short('c')
                 .long("columns")
-                .help("Display <columns> octets per line. Default: 16 (-P/--plain: 30 ) A 0 results in one long line of output.")
+                .help("Display <columns> octets per line. [default: 16 (-p/--plain: 30)] With -p/--plain, 0 results in one long line of output.")
                 .num_args(1)
                 .value_parser(clap::value_parser!(u16)),
         )
@@ -109,13 +119,14 @@ fn parse_cli() -> clap::ArgMatches {
             Arg::new("grouping")
                 .short('g')
                 .long("grouping")
-                .help("Number of octets per group. Default: 2. Not compatible with -P/--plain.")
+                .help("Number of octets per group. [default: 2] Not compatible with -P/--plain.")
                 .num_args(1)
                 .conflicts_with("plain")
                 .value_parser(clap::value_parser!(u16)),
         )
         .arg(
             Arg::new("seek")
+                .value_name("position")
                 .short('s')
                 .long("seek")
                 .help("Seek to <offset> before reading.")
@@ -125,9 +136,10 @@ fn parse_cli() -> clap::ArgMatches {
         )
         .arg(
             Arg::new("offset")
+                .value_name("display offset")
                 .short('o')
                 .long("offset")
-                .help("Read <offset> bytes from the input.")
+                .help("Add <offset> to the displayed file position.")
                 .value_parser(clap::value_parser!(usize)),
         )
         .arg(
@@ -137,6 +149,15 @@ fn parse_cli() -> clap::ArgMatches {
                 .help("Stop after <length> octets.")
                 .num_args(1)
                 .value_parser(clap::value_parser!(usize)),
+        )
+        .arg(
+            Arg::new("color")
+                .long("color")
+                .alias("colour")
+                .help("Color output. [default: auto]")
+                .num_args(1)
+                .value_name("when")
+                .value_parser(value_parser!(ColorChoice)),
         )
         .get_matches()
 }

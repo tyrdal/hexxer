@@ -1,5 +1,7 @@
 #![allow(dead_code)] // TODO: Remove this once everything is implemented
+
 mod config;
+use config::color_choice::ColorChoice;
 
 use owo_colors::{OwoColorize, Stream::Stdout};
 use std::fs::File;
@@ -8,6 +10,8 @@ use std::path::PathBuf;
 
 const SPACE: u8 = 0x20;
 const NUL: u8 = 0x00;
+
+// static mut CONFIG : config = onfig::new();
 
 enum Format {
     Hexadecimal,
@@ -39,6 +43,7 @@ enum Format {
 //             bottom_left: '└',
 //             bottom_joint: '┴',
 //             bottom_right: '┘',
+
 //         }
 //     }
 // }
@@ -58,12 +63,13 @@ fn discard_bytes<R: Read>(mut reader: R, mut to_skip: usize) -> io::Result<R> {
     Ok(reader)
 }
 
-fn colorize(text: &str, color: owo_colors::CssColors, use_color: bool) -> String {
-    if use_color {
-        text.if_supports_color(Stdout, |text| text.color(color))
-            .to_string()
-    } else {
-        text.to_string()
+fn colorize(text: &str, color: owo_colors::CssColors, color_choice: ColorChoice) -> String {
+    match color_choice {
+        ColorChoice::Auto => text
+            .if_supports_color(Stdout, |text| text.color(color))
+            .to_string(),
+        ColorChoice::Never => text.to_string(),
+        ColorChoice::Always => text.color(color).to_string(),
     }
 }
 
@@ -84,6 +90,7 @@ fn colorize(text: &str, color: owo_colors::CssColors, use_color: bool) -> String
 // }
 
 // TODO refactor coloring, too much repetition here
+// FIXME cols 0 does not work
 fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
     let octets_per_line = config.cols as usize;
     let mut buffer = vec![0u8; octets_per_line]; // Read in chunks of octets_per_line bytes
@@ -121,7 +128,7 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                                 } else {
                                     owo_colors::CssColors::CadetBlue
                                 },
-                                true,
+                                config.color_choice,
                             )
                         );
                     } else {
@@ -134,11 +141,12 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                                 } else {
                                     owo_colors::CssColors::CadetBlue
                                 },
-                                true,
+                                config.color_choice,
                             )
                         );
                     }
                 }
+
                 (0..bytes_read).for_each(|i| {
                     if i != 0 && i % config.grouping as usize == 0 {
                         print!(" "); // Extra space to separate groups
@@ -153,7 +161,7 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                                 } else {
                                     owo_colors::CssColors::LightSlateGray
                                 },
-                                true,
+                                config.color_choice,
                             )
                         } else if buffer[i] == NUL {
                             colorize(
@@ -163,7 +171,7 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                                 } else {
                                     owo_colors::CssColors::DarkGray
                                 },
-                                true,
+                                config.color_choice,
                             )
                         } else if buffer[i].is_ascii_control() || buffer[i] == SPACE {
                             colorize(
@@ -173,7 +181,7 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                                 } else {
                                     owo_colors::CssColors::GreenYellow
                                 },
-                                true,
+                                config.color_choice,
                             )
                         } else {
                             colorize(
@@ -183,7 +191,7 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                                 } else {
                                     owo_colors::CssColors::IndianRed
                                 },
-                                true,
+                                config.color_choice,
                             )
                         }
                     );
@@ -210,7 +218,7 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                                 } else {
                                     owo_colors::CssColors::CadetBlue
                                 },
-                                true,
+                                config.color_choice,
                             )
                         } else if byte == NUL {
                             colorize(
@@ -220,7 +228,7 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                                 } else {
                                     owo_colors::CssColors::DarkGray
                                 },
-                                true,
+                                config.color_choice,
                             )
                         } else if byte.is_ascii_control() || byte == SPACE {
                             colorize(
@@ -230,7 +238,7 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                                 } else {
                                     owo_colors::CssColors::GreenYellow
                                 },
-                                true,
+                                config.color_choice,
                             )
                         } else {
                             colorize(
@@ -240,7 +248,7 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                                 } else {
                                     owo_colors::CssColors::IndianRed
                                 },
-                                true,
+                                config.color_choice,
                             )
                         };
                         print!("{}", ch);
