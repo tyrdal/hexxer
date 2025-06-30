@@ -1,15 +1,15 @@
 [package]
 name = "hexxer"
-authors = ["René Möhring <rene_moehring@gmx.de>"]
+authors = ["tyrdal <tyrdal@gmx.de>"]
 version = "0.2.0"
-edition = "2021"
-description = "A xxd like hexdump cli tool"
+edition = "2024"
+description = "A hexdump cli tool"
 license = "MIT"
 keywords = ["xxd", "hexdump"]
 repository = "https://github.com/tyrdal/hexxer"
 
 [dependencies]
-clap = { version = "4.5.*"}
+clap = { version = "4.5.*", features = ["derive"] }
 owo-colors = { version = "4.2.*", features = ["supports-colors"] }
 
 [[bin]]
@@ -17,11 +17,11 @@ name = "hexx"
 path = "src/main.rs"
 
 # TODO:
+# subcommands dump, reverse, generate(array for languages)
 # help, roadmap and readme markdown files
 # reverse hexdump
 # config for colors -> see also hexyl --print-color-table, maybe alternating color shades between lines
 # binary and octal dumps
-# show offset in decimal
 # support for uppercase hex letters
 # export arrays for c, rust maybe more
 # autoskip -> a * replace nul lines, maybe also identical lines?

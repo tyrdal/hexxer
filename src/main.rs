@@ -113,7 +113,7 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
 
             if config.plain {
                 for &byte in &buffer[..bytes_read] {
-                    print!("{:02x}", byte);
+                    print!("{byte:02x}");
                 }
                 println!();
             } else {
@@ -122,7 +122,7 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                         print!(
                             "{}",
                             colorize(
-                                &format!("{:08}: ", offset),
+                                &format!("{offset:08}: "),
                                 if row_flag {
                                     owo_colors::CssColors::LightBlue
                                 } else {
@@ -135,7 +135,7 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                         print!(
                             "{}",
                             colorize(
-                                &format!("{:08x}: ", offset),
+                                &format!("{offset:08x}: "),
                                 if row_flag {
                                     owo_colors::CssColors::LightBlue
                                 } else {
@@ -251,7 +251,7 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                                 config.color_choice,
                             )
                         };
-                        print!("{}", ch);
+                        print!("{ch}");
                     }
                 }
                 println!();
