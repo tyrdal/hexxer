@@ -1,50 +1,68 @@
 use clap::ValueEnum;
+use owo_colors::{CssColors, DynColors };
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[derive(Debug, Copy, Clone, ValueEnum)]
 pub enum ColorChoice {
     Auto,
     Never,
     Always,
 }
 
-// impl std::fmt::Debug for ColorChoice {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         self.to_possible_value()
-//             .expect("no values are skipped")
-//             .get_name()
-//             .fmt(f)
-//     }
-// }
-//
-// impl std::fmt::Display for ColorChoice {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{:?}", self)
-//     }
-// }
-//
-// impl ValueEnum for ColorChoice {
-//     fn value_variants<'a>() -> &'a [Self] {
-//         &[ColorChoice::Auto, ColorChoice::Never, ColorChoice::Always]
-//     }
-//
-//     fn to_possible_value(&self) -> Option<PossibleValue> {
-//         Some(match self {
-//             ColorChoice::Auto => PossibleValue::new("auto").help("swiftly"),
-//             ColorChoice::Never => PossibleValue::new("never").help("Crawl slowly but steadily"),
-//             ColorChoice::Always => PossibleValue::new("always").help(" slowly but steadily"),
-//         })
-//     }
-// }
-//
-// impl FromStr for ColorChoice {
-//     type Err = String;
-//
-//     fn from_str(s: &str) -> Result<Self, Self::Err> {
-//         for variant in Self::value_variants() {
-//             if variant.to_possible_value().unwrap().matches(s, false) {
-//                 return Ok(*variant);
-//             }
-//         }
-//         Err(format!("invalid variant: {s}"))
-//     }
-// }
+#[derive(Debug, Copy, Clone)]
+pub struct LineColors {
+    normal: DynColors,
+    alternate: DynColors,
+}
+
+impl LineColors {
+
+    pub fn get(&self, is_alternate: bool) -> DynColors
+    {
+        if is_alternate {
+            self.alternate
+        } else {
+            self.normal
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct LineColorConfig {
+    pub panel_text: LineColors,
+    pub dump_text: LineColors,
+    pub nul_char: LineColors,
+    pub control_char: LineColors,
+    pub undefined_char: LineColors,
+}
+
+impl Default for LineColorConfig {
+    fn default() -> Self {
+        Self {
+            panel_text: LineColors {
+                normal: DynColors::Css(CssColors::LightBlue),
+                alternate: DynColors::Css(CssColors::CadetBlue),
+            },
+            dump_text: LineColors {
+                normal: DynColors::Css(CssColors::LightSteelBlue),
+                alternate: DynColors::Css(CssColors::LightSlateGray),
+            },
+            nul_char: LineColors {
+                normal: DynColors::Css(CssColors::DimGray),
+                alternate: DynColors::Css(CssColors::DarkGray),
+            },
+            control_char: LineColors {
+                normal: DynColors::Css(CssColors::LawnGreen),
+                alternate: DynColors::Css(CssColors::GreenYellow),
+            },
+            undefined_char: LineColors {
+                normal: DynColors::Css(CssColors::LightCoral),
+                alternate: DynColors::Css(CssColors::IndianRed),
+            },
+        }
+    }
+}
+impl LineColorConfig {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}

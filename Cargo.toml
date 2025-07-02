@@ -1,7 +1,7 @@
 [package]
 name = "hexxer"
 authors = ["tyrdal <tyrdal@gmx.de>"]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "A hexdump cli tool"
 license = "MIT"
@@ -17,7 +17,7 @@ name = "hexx"
 path = "src/main.rs"
 
 # TODO:
-# subcommands dump, reverse, generate(array for languages)
+# have an outfile or write to stdout if missing
 # help, roadmap and readme markdown files
 # reverse hexdump
 # config for colors -> see also hexyl --print-color-table, maybe alternating color shades between lines
