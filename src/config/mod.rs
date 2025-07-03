@@ -3,6 +3,7 @@ use color_choice::{ColorChoice, LineColorConfig};
 
 use std::path::PathBuf;
 use std::process;
+use std::io::{self, Write};
 
 use clap::builder::styling;
 use clap::{Arg, ArgMatches, Command, ValueEnum, arg, value_parser};
@@ -12,6 +13,7 @@ pub enum Language {
     C,
     Cpp,
     Rust,
+    Python,
 }
 
 impl std::fmt::Display for Language {
@@ -51,6 +53,7 @@ pub enum SubCommand {
 
 #[derive(Debug)]
 pub struct Config {
+    pub capitalize: bool,
     pub color_choice: ColorChoice,
     pub colors: LineColorConfig,
     pub cols: u16,
@@ -60,6 +63,7 @@ pub struct Config {
     pub input: Option<PathBuf>,
     pub language: Language,
     pub length: usize,
+    pub var_name: String,
     pub offset: usize,
     pub plain: bool,
     pub seek: i64,
@@ -101,14 +105,14 @@ fn parse_dump(matches: &ArgMatches, config: &mut Config) {
         .to_owned();
 }
 
-fn parse_generate(matches: &ArgMatches, config: &mut Config) {
+fn parse_generate(matches: &ArgMatches, config: &mut Config) -> io::Result<()> {
     if matches.get_flag("list-languages") {
         let langs: Vec<_> = Language::value_variants()
             .iter()
             .map(ToString::to_string)
             .collect();
         for lang in langs.iter() {
-            println!("{lang}");
+            writeln!(io::stdout(), "{lang}")?;
         }
         process::exit(0);
     }
@@ -117,15 +121,30 @@ fn parse_generate(matches: &ArgMatches, config: &mut Config) {
 
     config.input = matches.get_one::<String>("infile").map(PathBuf::from);
     config.cols = matches.get_one::<u16>("cols").copied().unwrap_or(12);
+    config.capitalize = matches.get_flag("capitalize");
     config.seek = matches.get_one::<i64>("seek").copied().unwrap_or(0i64);
     config.length = matches
         .get_one::<usize>("length")
         .copied()
-        .unwrap_or(0usize);
+        .unwrap_or(usize::MAX);
     config.language = matches
         .get_one::<Language>("language")
         .expect("Invalid language choice")
         .to_owned();
+    config.var_name = matches
+        .get_one::<String>("name")
+        .unwrap_or(
+            &config
+                .input
+                .as_ref()
+                .and_then(|path| path.file_name())
+                .and_then(|name| name.to_str())
+                .map(|name| name.replace('.', "_"))
+                .unwrap_or_default(),
+        )
+        .clone(); // TODO: check how to get rid of clone
+    config.vector = matches.get_flag("vector");
+    Ok(())
 }
 
 fn parse_reverse(matches: &ArgMatches, config: &mut Config) {
@@ -140,9 +159,10 @@ fn parse_reverse(matches: &ArgMatches, config: &mut Config) {
 }
 
 impl Config {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, io::Error> {
         let cli = parse_cli();
         let mut config = Config {
+            capitalize: false,
             cols: 0,
             color_choice: ColorChoice::Auto,
             colors: LineColorConfig::default(),
@@ -152,6 +172,7 @@ impl Config {
             input: None,
             language: Language::C,
             length: usize::MAX,
+            var_name: String::new(),
             plain: false,
             seek: 0,
             subcommand: SubCommand::Dump,
@@ -163,12 +184,12 @@ impl Config {
 
         match cli.subcommand() {
             Some(("dump", dump)) => parse_dump(dump, &mut config),
-            Some(("generate", generate)) => parse_generate(generate, &mut config),
+            Some(("generate", generate)) => parse_generate(generate, &mut config)?,
             Some(("reverse", reverse)) => parse_reverse(reverse, &mut config),
             _ => process::exit(0), // we should never get here
         }
 
-        config
+        Ok(config)
     }
 }
 
@@ -212,14 +233,12 @@ options:
                 .arg(
                     Arg::new("no-offset")
                         .long("no-offset").help( "Don't show the offset part.")
-                        .default_value("false")
                         .action(clap::ArgAction::SetTrue),
                 )
                 .arg(
                     Arg::new("no-text")
                         .long("no-text")
                         .help( "Don't show the text part.")
-                        .default_value("false")
                         .action(clap::ArgAction::SetTrue),
                 )
                 .arg(

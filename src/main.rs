@@ -2,11 +2,12 @@
 
 mod config;
 
-use config::{SubCommand, color_choice::ColorChoice};
+use config::{Language, SubCommand, color_choice::ColorChoice};
 use owo_colors::{OwoColorize, Stream::Stdout};
-use std::fs::File;
-use std::io::{self, Read, Seek, SeekFrom};
+use std::fs::{self, File};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
+use std::process;
 
 const SPACE: u8 = 0x20;
 const NUL: u8 = 0x00;
@@ -36,6 +37,7 @@ fn colorize(text: &str, color: owo_colors::DynColors, color_choice: ColorChoice)
     }
 }
 
+#[allow(clippy::needless_range_loop)]
 fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
     let octets_per_line = if config.cols > 0 {
         config.cols as usize
@@ -57,10 +59,10 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
 
         if config.plain {
             for &byte in &buffer[..bytes_read] {
-                print!("{}", config.format.value(byte));
+                write!(io::stdout(), "{}", config.format.value(byte))?;
             }
             if config.cols > 0 {
-                println!();
+                writeln!(io::stdout(),)?;
             }
         } else {
             if config.show_offset {
@@ -77,50 +79,41 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                         config.color_choice,
                     )
                 };
-                print!("{offset_block}",);
+                write!(io::stdout(), "{offset_block}",)?;
             }
 
-            (0..bytes_read).for_each(|i| {
+            for i in 0..bytes_read {
+                // TODO: use iterators so that write! can be used with ? operator
                 if i != 0 && i % config.grouping as usize == 0 {
-                    print!(" "); // Extra space to separate groups
+                    write!(io::stdout(), " ")?; // Extra space to separate groups
                 }
-                print!(
+
+                write!(
+                    io::stdout(),
                     "{}",
-                    if buffer[i].is_ascii_graphic() {
-                        colorize(
-                            &config.format.value(buffer[i]),
-                            config.colors.dump_text.get(row_flag),
-                            config.color_choice,
-                        )
-                    } else if buffer[i] == NUL {
-                        colorize(
-                            &config.format.value(buffer[i]),
-                            config.colors.nul_char.get(row_flag),
-                            config.color_choice,
-                        )
-                    } else if buffer[i].is_ascii_control() || buffer[i] == SPACE {
-                        colorize(
-                            &config.format.value(buffer[i]),
-                            config.colors.control_char.get(row_flag),
-                            config.color_choice,
-                        )
-                    } else {
-                        colorize(
-                            &config.format.value(buffer[i]),
-                            config.colors.undefined_char.get(row_flag),
-                            config.color_choice,
-                        )
-                    }
-                );
-            });
-            print!(" ");
+                    colorize(
+                        &config.format.value(buffer[i]),
+                        if buffer[i].is_ascii_graphic() {
+                            config.colors.dump_text.get(row_flag)
+                        } else if buffer[i] == NUL {
+                            config.colors.nul_char.get(row_flag)
+                        } else if buffer[i].is_ascii_control() || buffer[i] == SPACE {
+                            config.colors.control_char.get(row_flag)
+                        } else {
+                            config.colors.undefined_char.get(row_flag)
+                        },
+                        config.color_choice
+                    )
+                )?;
+            }
+            write!(io::stdout(), " ")?;
 
             // Pad for short lines
             if bytes_read < octets_per_line {
                 for i in bytes_read..octets_per_line {
-                    print!("  ");
+                    write!(io::stdout(), "  ")?;
                     if i % config.grouping as usize == 0 {
-                        print!(" ");
+                        write!(io::stdout(), " ")?;
                     }
                 }
             }
@@ -152,15 +145,111 @@ fn dump<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
                             config.color_choice,
                         )
                     };
-                    print!("{ch}");
+                    write!(io::stdout(), "{ch}")?;
                 }
             }
-            println!();
+            writeln!(io::stdout(),)?;
         }
 
         total_read += bytes_read;
         offset += bytes_read;
         row_flag = !row_flag;
+    }
+
+    Ok(())
+}
+
+fn generate_array<R: Read>(mut reader: R, config: &config::Config) -> io::Result<()> {
+    let var_name = if config.capitalize {
+        config.var_name.to_uppercase()
+    } else {
+        config.var_name.clone()
+    };
+
+    let octets_per_line = if config.cols > 0 {
+        config.cols as usize
+    } else {
+        12
+    };
+    let mut buffer = vec![0u8; octets_per_line]; // Read in chunks of octets_per_line bytes
+    let mut total_read: usize = 0;
+
+    if config.input.is_some() {
+        let array_size = std::cmp::min(
+            fs::metadata(config.input.as_ref().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidInput, "No input file specified")
+            })?)
+            .map(|meta| meta.len())
+            .expect("Could not get file size!")
+                - config.seek.unsigned_abs(),
+            config.length as u64,
+        );
+        match config.language {
+            Language::C => {
+                writeln!(
+                    io::stdout(),
+                    "#include <stdint.h>\n\nuint8_t {var_name}[] = {{"
+                )?;
+            }
+            Language::Cpp => {
+                if config.vector {
+                    writeln!(
+                        io::stdout(),
+                        "#include <vector>\n#include <cstdint>\n\nstd::vector<uint8_t> {var_name} = {{"
+                    )?;
+                } else {
+                    writeln!(
+                        io::stdout(),
+                        "#include <array>\n#include <cstdint>\n\nstd::array<uint8_t, {array_size}> {var_name} = {{"
+                    )?;
+                }
+            }
+            Language::Rust => {
+                if config.vector {
+                    writeln!(io::stdout(), "pub let {var_name} = vec![")?;
+                } else {
+                    writeln!(io::stdout(), "pub const {var_name}: [u8; {array_size}] = [")?;
+                }
+            }
+            Language::Python => {
+                writeln!(io::stdout(), "{var_name} = [")?;
+            }
+        }
+    }
+
+    loop {
+        let to_read: usize = std::cmp::min(octets_per_line, config.length - total_read);
+        let bytes_read = reader.read(&mut buffer[..to_read])?;
+        if bytes_read == 0 {
+            // EOF reached
+            break;
+        }
+
+        write!(io::stdout(), "  ")?;
+        // avoid trailing space for last byte
+        for (i, &byte) in buffer[..bytes_read].iter().enumerate() {
+            if i > 0 {
+                write!(io::stdout(), ", ")?;
+            }
+            write!(io::stdout(), "0x{}", config.format.value(byte))?;
+        }
+        writeln!(io::stdout(), ",")?;
+
+        total_read += bytes_read;
+    }
+
+    if config.input.is_some() {
+        match config.language {
+            Language::C | Language::Cpp => {
+                writeln!(io::stdout(), "}};")?;
+            }
+            Language::Python => {
+                writeln!(io::stdout(), "]")?;
+            }
+            Language::Rust => {
+                writeln!(io::stdout(), "];")?;
+            }
+        }
     }
 
     Ok(())
@@ -193,12 +282,23 @@ fn get_reader(input: Option<&PathBuf>, seek: i64) -> io::Result<Box<dyn Read>> {
     }
 }
 
-fn main() -> std::io::Result<()> {
-    let config = config::Config::new();
+fn run() -> io::Result<()> {
+    let config = config::Config::new()?;
+    let reader = get_reader(config.input.as_ref(), config.seek)?;
     match config.subcommand {
-        SubCommand::Dump => dump(get_reader(config.input.as_ref(), config.seek)?, &config)?,
-        SubCommand::Generate => todo!(),
+        SubCommand::Dump => dump(reader, &config)?,
+        SubCommand::Generate => generate_array(reader, &config)?,
         SubCommand::Reverse => todo!(),
-    }
+    };
     Ok(())
+}
+
+fn main() {
+    if let Err(err) = run() {
+        if err.kind() == io::ErrorKind::BrokenPipe {
+            process::exit(0);
+        }
+        eprintln!("Error: {err}");
+        process::exit(1);
+    }
 }
